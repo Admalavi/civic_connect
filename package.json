@@ -1,0 +1,1 @@
+{"name":"civicconnect","private":true,"scripts":{"install:all":"npm i && npm i --prefix server && npm i --prefix client","dev":"concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"","create-admin":"npm run create-admin --prefix server --"},"devDependencies":{"concurrently":"^8.2.2"}}

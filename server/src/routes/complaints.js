@@ -1,0 +1,34 @@
+import {Router} from 'express';import multer from 'multer';import jwt from 'jsonwebtoken';import {v2 as cloud} from 'cloudinary';
+import Complaint from '../models/Complaint.js';import {protect,adminOnly,w,httpErr} from '../middleware/auth.js';import {CATEGORIES,STATUSES} from '../utils/constants.js';
+const r=Router();
+cloud.config({cloud_name:process.env.CLOUDINARY_CLOUD_NAME,api_key:process.env.CLOUDINARY_API_KEY,api_secret:process.env.CLOUDINARY_API_SECRET});
+const cloudOk=()=>!!(process.env.CLOUDINARY_CLOUD_NAME&&process.env.CLOUDINARY_API_KEY&&process.env.CLOUDINARY_API_SECRET);
+const up=multer({storage:multer.memoryStorage(),limits:{fileSize:5e6},fileFilter:(q,f,cb)=>/^image\/(jpe?g|png|webp)$/.test(f.mimetype)?cb(null,true):cb(httpErr(400,'Only JPG, PNG or WEBP images allowed'))});
+const toCloud=b=>new Promise((ok,no)=>cloud.uploader.upload_stream({folder:'civicconnect'},(e,x)=>e?no(e):ok(x.secure_url)).end(b));
+const loc=b=>{const lat=Number(b.lat),lng=Number(b.lng);if(b.lat===undefined||b.lng===undefined||b.lat===''||b.lng===''||!(Math.abs(lat)<=90&&Math.abs(lng)<=180))throw httpErr(400,'Valid latitude and longitude are required');return{type:'Point',coordinates:[lng,lat]}};
+const filt=q=>{const f={};if(CATEGORIES.includes(q.category))f.category=q.category;if(STATUSES.includes(q.status))f.status=q.status;
+ if(q.q){const e=String(q.q).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');f.$or=['title','complaintId','address'].map(k=>({[k]:new RegExp(e,'i')}))}return f};
+const page=async(q,s,extra={})=>{const p=Math.max(1,+q.query.page||1),l=Math.min(50,+q.query.limit||9),f={...filt(q.query),...extra};
+ const[items,total]=await Promise.all([Complaint.find(f).select('-citizen -__v').sort({createdAt:q.query.sort==='old'?1:-1}).skip((p-1)*l).limit(l),Complaint.countDocuments(f)]);
+ s.json({items,total,page:p,pages:Math.ceil(total/l)||1})};
+const near=(lat,lng,m,f={})=>Complaint.find({...f,location:{$nearSphere:{$geometry:{type:'Point',coordinates:[+lng,+lat]},$maxDistance:m}}}).select('complaintId title category status photoUrl location address').limit(50);
+r.get('/',w((q,s)=>page(q,s)));
+r.get('/mine',protect,w((q,s)=>page(q,s,{citizen:q.user._id})));
+r.get('/map',w(async(q,s)=>s.json(await Complaint.find(filt(q.query)).select('complaintId title category status photoUrl location address').limit(2000))));
+r.get('/nearby',w(async(q,s)=>{loc(q.query);s.json(await near(q.query.lat,q.query.lng,Math.min(+q.query.radius||1000,50000),filt(q.query)))}));
+r.get('/duplicates',w(async(q,s)=>{loc(q.query);s.json(await near(q.query.lat,q.query.lng,+process.env.DUPLICATE_RADIUS_M||100,{category:q.query.category,status:{$ne:'Resolved'}}))}));
+r.get('/:id',w(async(q,s)=>{const c=await Complaint.findOne({complaintId:q.params.id}).populate('statusHistory.by','name').lean();if(!c)throw httpErr(404,'Complaint not found');
+ let mine=false;try{const d=jwt.verify((q.headers.authorization||'').replace('Bearer ',''),process.env.JWT_SECRET);mine=String(c.citizen)===d.id}catch{}
+ delete c.citizen;s.json({...c,isOwner:mine})}));
+r.post('/',protect,up.single('photo'),w(async(q,s)=>{const b=q.body;let photoUrl='';
+ if(q.file){if(!cloudOk())throw httpErr(503,'Image hosting not configured: set CLOUDINARY_* variables in server/.env (see README)');photoUrl=await toCloud(q.file.buffer)}
+ const c=await Complaint.create({title:b.title,description:b.description,category:b.category,address:b.address,location:loc(b),photoUrl,citizen:q.user._id,statusHistory:[{from:null,to:'Pending',by:q.user._id,remark:'Complaint submitted'}]});
+ s.status(201).json(c)}));
+const own=async q=>{const c=await Complaint.findOne({complaintId:q.params.id});if(!c)throw httpErr(404,'Complaint not found');
+ if(String(c.citizen)!==String(q.user._id))throw httpErr(403,'Not your complaint');if(c.status!=='Pending')throw httpErr(409,'Only Pending complaints can be edited or withdrawn');return c};
+r.put('/:id',protect,w(async(q,s)=>{const c=await own(q);for(const k of['title','description','category','address'])if(q.body[k]!==undefined)c[k]=q.body[k];if(q.body.lat!==undefined)c.location=loc(q.body);await c.save();s.json(c)}));
+r.delete('/:id',protect,w(async(q,s)=>{const c=await own(q);await c.deleteOne();s.json({message:'Complaint withdrawn'})}));
+r.patch('/:id/status',protect,adminOnly,w(async(q,s)=>{const{status,remark=''}=q.body;if(!STATUSES.includes(status))throw httpErr(400,'Invalid status');
+ const c=await Complaint.findOne({complaintId:q.params.id});if(!c)throw httpErr(404,'Complaint not found');
+ c.statusHistory.push({from:c.status,to:status,by:q.user._id,remark:String(remark).slice(0,500)});c.status=status;await c.save();s.json(c)}));
+export default r;

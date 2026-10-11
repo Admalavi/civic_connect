@@ -1,0 +1,11 @@
+export const CATS=['Pothole / Road Damage','Garbage','Streetlight','Water Leakage','Drainage','Other'];
+export const STATUSES=['Pending','In Progress','Resolved'];
+export const COLORS={Pending:'#f59e0b','In Progress':'#3b82f6',Resolved:'#10b981'};
+export const inp='mt-1 w-full border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none bg-white';
+export const btn='inline-flex items-center gap-2 bg-teal-600 hover:bg-teal-700 text-white font-medium px-4 py-2 rounded-lg disabled:opacity-50';
+export const fmt=d=>new Date(d).toLocaleString();
+export const Field=({label,children})=><label className="block text-sm font-medium mb-3">{label}{children}</label>;
+export const Badge=({status})=><span className="text-xs font-semibold text-white px-2 py-0.5 rounded-full" style={{background:COLORS[status]}}>{status}</span>;
+export const Stat=({label,value,color='#0f766e'})=><div className="border rounded-xl p-4 shadow-sm"><div className="text-sm text-slate-500">{label}</div><div className="text-3xl font-bold" style={{color}}>{value}</div></div>;
+export const Empty=({text})=><div className="text-center text-slate-500 border-2 border-dashed rounded-xl p-10">{text}</div>;
+export const Skeleton=()=><div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">{[1,2,3].map(i=><div key={i} className="h-56 bg-slate-100 animate-pulse rounded-xl"/>)}</div>;

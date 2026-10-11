@@ -1,0 +1,9 @@
+import {Link,NavLink,Outlet,Navigate,useNavigate} from 'react-router-dom';import {MapPin} from 'lucide-react';import {useAuth} from '../context/AuthContext.jsx';
+export function Layout(){const{user,logout}=useAuth();const nav=useNavigate();const l=({isActive})=>'px-2 py-1 rounded '+(isActive?'text-teal-700 font-semibold':'hover:text-teal-700');
+ return <div className="min-h-screen flex flex-col"><header className="border-b bg-white sticky top-0 z-[1000]"><nav className="max-w-6xl mx-auto p-3 flex flex-wrap items-center gap-2 text-sm"><Link to="/" className="flex items-center gap-1 font-bold text-lg mr-auto"><MapPin className="text-teal-600"/>CivicConnect</Link>
+ <NavLink to="/map" className={l}>Issue Map</NavLink>
+ {user?.role==='citizen'&&<><NavLink to="/report" className={l}>Report</NavLink><NavLink to="/my-complaints" className={l}>My Complaints</NavLink><NavLink to="/dashboard" className={l}>Dashboard</NavLink><NavLink to="/profile" className={l}>Profile</NavLink></>}
+ {user?.role==='admin'&&<><NavLink to="/admin" end className={l}>Admin</NavLink><NavLink to="/admin/complaints" className={l}>Manage</NavLink><NavLink to="/admin/map" className={l}>Admin Map</NavLink></>}
+ {user?<button onClick={()=>{logout();nav('/')}} className="px-3 py-1 border rounded-lg">Logout</button>:<><NavLink to="/login" className={l}>Login</NavLink><Link to="/register" className="px-3 py-1 bg-teal-600 text-white rounded-lg">Register</Link></>}</nav></header>
+ <main className="flex-1 max-w-6xl w-full mx-auto p-4"><Outlet/></main><footer className="border-t text-center text-sm text-slate-500 p-4">CivicConnect – Map-Based Civic Issue Reporting · Map data © OpenStreetMap contributors</footer></div>}
+export const Guard=({role,children})=>{const{user,ready}=useAuth();if(!ready)return <p className="p-8">Loading…</p>;if(!user)return <Navigate to="/login"/>;if(role&&user.role!==role)return <Navigate to="/"/>;return children};
